@@ -23,9 +23,7 @@ header-includes:
 
 ```{r, eval=F}
 # download packages, if necessary
-install.packages(c("vegan",  "FD", 
-                   "ecodist","MASS", "cluster", "tree", 
-                   "gclus"))
+install.packages(c("vegan",  "FD"))
 ```
 
 
@@ -33,13 +31,6 @@ install.packages(c("vegan",  "FD",
 #load packages
 library(vegan)
 library(FD)
-
-library(ecodist)
-
-library(MASS)
-library(cluster)
-library(tree)
-library(gclus)
 ```
 
 ```{r, eval=F}
@@ -275,41 +266,6 @@ summary(vare.cca) # reports all results of the model
 varp <- varpart (varespec.hel, ~ Al, ~ K, ~ N, data = varechem)
 varp # Check for the marginal effects of each variable
 plot (varp, digits = 2) # Creates a Venn's diagram. Digits define the number of decimals
-
-```
-
-
-
-# PART 7 - PERMANOVA
-*Permanova is a non-parametric, multivariate equivalent of common anova. It serves to test whether groups of sites, described by multiple parameters (e.g. species, or env. variables), are significantly different from each other in the multivariate space. Being based on dissimilarities, and being dissimilarities **not independent** from each other, PERMANOVA uses a permutational approach to calculate significance. This makes it particularly robust to heteroscedasticy of data and non-normality of residuals.*  
-
-**Q8 - Divide the dune dataset in groups and test if these groups are significantly different based on their species composition**    
-1. the dune dataset is composed of 20 sites. Assign them to 4 random groups and run PERMANOVA. Is the test correctly rejecting the hypothesis that the groups are different?  
-2. Now run again the PERMANOVA test and check if the species composition of dune differs across `Management` groups. Is the difference now significant?  
-3. [Advanced] Analyse the command:  
-*plot(betadisper(vegdist(dune), group=dune.env$Management))*  
-Use vegan help functions to understand how this command can be used to visualize graphically your PERMANOVA test
-
-
-```{r, eval=F}
-#Hints 
-#To assign groups randomly you may want to creat a vector of 20
-#elements, where the number 1:4 are repeated evenly, and then
-#sample from this vector
-vector <- rep(1:4, each=5)
-groups <- sample(vector)
-?adonis  ##for permanova ## don't forget to set an appropriate dissimilarity measure!
-```
-
-
-```{r, eval=F, echo=F}
-#groups <- sample(rep(1:4, 5))
-perma.random <- adonis(dune ~ groups, permutations=999, method="bray")
-perma.manag <- adonis(dune ~ Management, data=dune.env, permutations = 999,
-                      method="bray")
-
-plot(betadisper(vegdist(dune), group=dune.env$Management))
-
 
 ```
 
