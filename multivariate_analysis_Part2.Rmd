@@ -8,15 +8,6 @@ output:
   html_notebook: default
   html_document:
     df_print: paged
-header-includes:
- \usepackage{booktabs}
- \usepackage{longtable}
- \usepackage{array}
- \usepackage{multirow}
- \usepackage[table]{xcolor}
- \usepackage{wrapfig}
- \usepackage{float}
- \floatplacement{figure}{H}
 ---
 
 *Code adapted from the vegan tutorial, Oksanen 2015. Additional acknowledgements to B. Jimenez-Alfaro & O. Purschke*  
