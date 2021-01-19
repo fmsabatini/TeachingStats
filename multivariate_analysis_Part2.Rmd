@@ -1,0 +1,318 @@
+---
+title: 'Multivariate statistics'
+subtitle: 'Classification & Ordination'
+author: "Francesco Maria Sabatini"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_notebook: default
+  html_document:
+    df_print: paged
+header-includes:
+ \usepackage{booktabs}
+ \usepackage{longtable}
+ \usepackage{array}
+ \usepackage{multirow}
+ \usepackage[table]{xcolor}
+ \usepackage{wrapfig}
+ \usepackage{float}
+ \floatplacement{figure}{H}
+---
+
+*Code adapted from the vegan tutorial, Oksanen 2015. Additional acknowledgements to B. Jimenez-Alfaro & O. Purschke*  
+
+```{r, eval=F}
+# download packages, if necessary
+install.packages(c("vegan",  "FD", 
+                   "ecodist","MASS", "cluster", "tree", 
+                   "gclus"))
+```
+
+
+```{r, warning=F, message=F}
+#load packages
+library(vegan)
+library(FD)
+
+library(ecodist)
+
+library(MASS)
+library(cluster)
+library(tree)
+library(gclus)
+```
+
+```{r, eval=F}
+# clean workspace
+rm(list=ls())
+#reimport data
+data(dune)
+data(dune.env)
+data(varespec)
+data(varechem)
+data(BCI)
+data(BCI.env)
+```
+
+# PART 4 - CLASSIFICATION
+
+**Q5 - Now, let's consider the dune dataset. You are asked to produce different classifications and compare them**  
+We first have to choose a dissimilarity which is appropriate for our task.  
+1. Focus on species data, run a k-means classification (with 5 groups). Explore the output and then calculate the mean value of the 'A1' [thickness of soil A1 horizon, from the data.frame `dune.env`] for each group. [for advanced users - build a boxplot of A1 per group]  
+2. Classify again your data with the following hierarchical algorithms: single-linkage, complete-linkage, UPGMA (=average). Produce and compare the dendrograms for these three algorithms. How do they differ? Why? Compute again the means of A1 when dividing (=cutting) the dendrogram in 5 groups   
+3. Calculate a cophenetic matrix for each of your dendrograms (don't forget to explore the output!): how well are they correlated to your original dissimilarity matrix? Which algorithm better fits your data?  
+4. Now classify the plots based on their environmental characteristics, using the UPGMA algorithm. Please note that some of the environmental variables in the `dune.env` dataset are either ordinal or nominal (=factor). Which dissimilarity measure should we use to classify sites based on their environmental conditions?
+Build the dendrogram and compare it to the UPGMA dendrogram based on species data. How well do they match? [you may also compare the correlation of the cophenetic matrices]
+```{r, eval=F}
+#hints
+?kmeans
+?tapply
+?hclust
+?rect.hclust
+?cophenetic
+?cutree
+?cluster::agnes
+?FD::gowdis
+```
+ 
+
+```{r, eval=F, echo=F}
+# Non-hierarchical classification ####
+dune.dist <- vegdist(dune, method="bray") # the distance matrix
+dune.kmeans <- kmeans(dune, centers=5, iter.max=10000) # k-means method
+
+## mean A1 per group
+a1.mean <- tapply(dune.env$A1, dune.kmeans$cluster, "mean")
+boxplot(dune.env$A1 ~ dune.kmeans$cluster, col=1:5, ylab="A1 thickness",
+        xlab="Group (k-means)")
+
+# Hierarchical classification of species data
+dune.single <- hclust(dune.dist, method="single")
+dune.complete <- hclust(dune.dist, method="complete")
+dune.average <- hclust(dune.dist, method="average")
+
+# Compare the classifications graphically
+par(mfrow=c(3,1)) ## arrange three plots into one graph
+plot(dune.single)
+plot(dune.complete)
+plot(dune.average)
+dev.off() ## deactivates multi-plotting
+# compute means of A1 when cutting the dendrogram to 5 groups
+plot(dune.average)
+rect.hclust(tree = dune.average, 5)
+groups <- cutree(dune.average, 5)
+tapply(dune.env$A1, groups, "mean")
+boxplot(dune.env$A1 ~ groups, col=1:5, xlab="groups (UPGMA)", ylab="A1 thickness")
+
+## evaluate classifications
+coph.single <- cophenetic(dune.single)
+coph.complete <- cophenetic(dune.complete)
+coph.average <- cophenetic(dune.average)
+plot(dune.dist, coph.single) 
+# correlates original dissimilarities with the dissimilarity of the tree
+cor(dune.dist,coph.single)
+cor(dune.dist,coph.complete)
+cor(dune.dist,coph.average)
+
+## dissimilarity with mixed data - use Gower dissimilarity
+dune.env.gowdis <- gowdis(dune.env)
+dune.env.average <- hclust(dune.env.gowdis, method="average")
+par(mfrow=c(1,2)) # compare clustering based on sp vs. env. data
+plot(dune.average)
+plot(dune.env.average)
+dev.off()
+
+coph.env.average <- cophenetic(dune.env.average)
+cor(coph.env.average, coph.average)
+
+```
+
+
+
+# PART 5 - UNCONSTRAINED ORDINATION
+
+**Q6 - Make yourself familiar with computing a pca in vegan**  
+1. Run a PCA on the `varechem` dataset, both with and without standardizing the data. Examine the outputs and create Scree Plots. How much variation is explained by the first axis? [Advanced] How many axes are needed to retain 90% of total variation?  
+2. Create biplots for the PCA on transformed data, showing axes 1&2, and axes 1&3. Compare the two possible scalings. 
+3. Now run a NMDS on using the species data from`varespec`. Try to set k=2, and k=3, try with 20 iterations in both cases. Make sure you explore your output (what kind of object is it? where is the stress values stored?) How much does the stress get reduced by increasing the number of axes? [Make sure you start from a dissimilarity matrix appropriate to your data type!]  
+4. You can passively project your environmental predictors on your ordinations using the function `envfit`. Try to project on your 2-dimensional nmds the data contained in `varechem`. Explore your output. Which variable has the highest correlation with the first nmds axis? Try to plot your envfit onto your nmds.  
+5. [Advanced - optional] Re-run a k-means classification with 5 groups. Display these groups graphically when plotting your PCA ordination. Does the grouping make sense in the PCA?  
+
+```{r, eval=F}
+#Hints
+?rda
+?screeplot
+str(output.rda) #replace 'output.rda' with the name of your rda object 
+#You can extract the eigenvalues as
+output.rda$CA$eig
+?cumsum
+?plot.cca
+?biplot
+?metaMDS
+?envfit
+```
+
+
+```{r, eval=F, echo=F}
+# PCA - Principal Components Analysis ####
+## 1) The basic method (no scaling !!! Why is this wrong?)
+vare.pca <- rda(varechem) # Note the function is called "rda" in vegan
+vare.pca
+# Total intertia is the variance, see decreasing eigenvalues of axes
+# Question: how much variance does the first axis explain?
+# Answer: 64057/85655 = 74.8 %
+screeplot(vare.pca)
+cumsum(vare.pca$CA$eig) / sum(vare.pca$CA$eig)  *100
+# The first 4 axes explain already 90% of total variation
+plot(vare.pca, scaling = "species")
+#the term 'species' is a confusing legacy. It should be intended as 'variables'
+plot(vare.pca, scaling = "sites") 
+
+## 2) PCA with scaling
+vare.pca.st <- rda(varechem, scale = TRUE) # Now the variance of species is 
+#                     standarized and inertia is correlation instead of variance
+vare.pca.st    #note that numbers differ, and the inertia 
+               #is maximized to the numnber of species
+# "3" scales both species and sites; "2" by sites, "1" by species(=variables)
+plot(vare.pca.st, scaling = 2)
+biplot (vare.pca.st, display = 'species')
+plot(vare.pca.st, scaling = 1)
+biplot (vare.pca.st, display = 'sites')
+
+plot(vare.pca.st, choices=c(1,3), scaling = 3) 
+biplot(vare.pca.st, choices=c(1,3), scaling = 3, display=c("species", "sites"))
+
+
+## 3) Non-metric Multidimensional Scaling
+varespec.dist <- vegdist(varespec, method = "bray")
+nms2 <- metaMDS(varespec.dist, k=2, try = 20)
+nms3 <- metaMDS(varespec.dist, k=3, try = 20)
+stressplot(nms3)
+
+
+## 4) passively project environmental variables with envfit
+envfit2 <- envfit(nms3, varechem)
+plot(nms2, display="sites")
+plot(envfit2)
+
+
+## 5) Plot results of NMDS and color sites based on km classification
+plot(nms2, display="sites", type="n")
+points(nms2$points, col=varespec.km$cluster)
+
+
+## [Advanced] Group colors in a PCA
+varespec.km <- kmeans(varechem, centers=5) #Clustering on species!
+ordiplot(vare.pca.st, display="sites", type="n")
+points(vare.pca.st, display="sites", col=varespec.km$cluster)
+points(vare.pca.st, display="species", pch="+")
+text(vare.pca.st, display="species", labels = colnames(vare.pca.st$Ybar))
+
+
+```
+
+
+
+# PART 6 - CONSTRAINED ORDINATION
+
+*Also called "Direct gradient analysis" (in CANOCO) or "Canonical ordination" (in other literature). Remember that here we ask for the variation explained by constrains (predictors). We are using the same functions (cca, rda) but in the context of model formulas of the type y ~ x + z* 
+
+**Q7 - Now fit a constrained RDA to the varespec data, using a selection of three environmental variables as predictors. You may want to select your three variables after checking for multiple correlations for instance through the envfit plotting**   
+1. As above, produce a screeplot, and explore the eigenvalues. What percentage of variation is explained by the predictors? Try to plot the output. Compare with the biplots produced for the unconstrained RDA.  
+2. Do the same on the `dune` data set. Use all environmental variables as predictors. How much variation do your predictors now explain? [hint - to include all variables use the formula: x ~. ]  
+3. Plot the output. Note how nominal and ordinal variables [=factors] are shown.  
+4. Go back to your varespec model with three predictors, and compute the variation partitioning. Create a Venn diagram. How much variation is independently explained by your three predictors?  
+5. [optional] Repeat the constrained ordination analysis of `varespec` using CCA. How much variation is the model now explaining?  
+```{r, eval=F}
+#Hints
+?varpart
+?rda
+?cca
+?plot.varpart
+```
+
+
+```{r, eval=F, echo=F}
+# RDA - Redundance Analysis ####
+varespec.hel <- decostand(varespec, method="hellinger")
+# Basic RDA with continuous variables using the "varespec" dataset
+vare.rda <- rda(varespec.hel ~ pH + P + N, varechem)
+vare.rda # Note the info for 3 constrained and 20 unconstrained axes
+plot(vare.rda) # compare the interpretation with the nmds plot with envfit
+
+# RDA with factors with the "dune" dataset
+dune.hel <- decostand(dune, method="hellinger")
+dune.rda <- rda(dune.hel ~., data = dune.env)
+dune.rda # "Management" has four levels, CCA computes three contrasts (dummy variables)
+plot(dune.rda, scaling=1, type="points")
+
+
+# Model building: include/select what variables to include
+# Model with all variables (not recommended)
+mod1 <- rda(varespec.hel~., varechem) # "." uses all available variables
+mod1 # This model uses all variables (Overfitted!!!)
+
+# Model selection
+mod0 <- rda(varespec.hel ~1, varechem) # creates a basis model equal to the
+                                       # unconstrained version
+mod <- step(mod0, scope=formula(mod1), test="perm") # Uses AIC for including variables
+mod # shows the best model according to the AIC (these are supposed to be
+    # the best variables)
+
+
+# CCA - Canonical Correspondence Analysis ####
+# Basically, the same as explained for RDA (model selection, etc.)
+# Here just see the reduced model with four variables, as before
+vare.cca <- cca(varespec.hel ~ Al + K + N, varechem)
+vare.cca # You will see the results differ a little bit (but this depends on the data)
+summary(vare.cca) # reports all results of the model
+
+# Variance partitioning ####
+
+# This function is useful to separate (partition) the effect of variables
+# It is implemented only for RDA as a linear method (nor for CCA)
+
+varp <- varpart (varespec.hel, ~ Al, ~ K, ~ N, data = varechem)
+varp # Check for the marginal effects of each variable
+plot (varp, digits = 2) # Creates a Venn's diagram. Digits define the number of decimals
+
+```
+
+
+
+# PART 7 - PERMANOVA
+*Permanova is a non-parametric, multivariate equivalent of common anova. It serves to test whether groups of sites, described by multiple parameters (e.g. species, or env. variables), are significantly different from each other in the multivariate space. Being based on dissimilarities, and being dissimilarities **not independent** from each other, PERMANOVA uses a permutational approach to calculate significance. This makes it particularly robust to heteroscedasticy of data and non-normality of residuals.*  
+
+**Q8 - Divide the dune dataset in groups and test if these groups are significantly different based on their species composition**    
+1. the dune dataset is composed of 20 sites. Assign them to 4 random groups and run PERMANOVA. Is the test correctly rejecting the hypothesis that the groups are different?  
+2. Now run again the PERMANOVA test and check if the species composition of dune differs across `Management` groups. Is the difference now significant?  
+3. [Advanced] Analyse the command:  
+*plot(betadisper(vegdist(dune), group=dune.env$Management))*  
+Use vegan help functions to understand how this command can be used to visualize graphically your PERMANOVA test
+
+
+```{r, eval=F}
+#Hints 
+#To assign groups randomly you may want to creat a vector of 20
+#elements, where the number 1:4 are repeated evenly, and then
+#sample from this vector
+vector <- rep(1:4, each=5)
+groups <- sample(vector)
+?adonis  ##for permanova ## don't forget to set an appropriate dissimilarity measure!
+```
+
+
+```{r, eval=F, echo=F}
+#groups <- sample(rep(1:4, 5))
+perma.random <- adonis(dune ~ groups, permutations=999, method="bray")
+perma.manag <- adonis(dune ~ Management, data=dune.env, permutations = 999,
+                      method="bray")
+
+plot(betadisper(vegdist(dune), group=dune.env$Management))
+
+
+```
+
+
+# You made it!  
+
